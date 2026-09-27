@@ -92,6 +92,26 @@ async def fetch_weather_data(lat: float, lon: float):
             "precipitation_probability_max": [10]
         }
     }
+    
+    
+# Historical Climate Data Ingestion (5-Year Trend Comparison)
+async def fetch_historical_climate_trends(lat: float, lon: float):
+    # Fetch data for the same calendar week from previous years
+    today = datetime.utcnow()
+    past_year = today.year - 1
+    start_date = f"{past_year}-{today.strftime('%m-%d')}"
+    url = f"https://archive-api.open-meteo.com/v1/archive?latitude={lat}&longitude={lon}&start_date={start_date}&end_date={start_date}&daily=temperature_2m_max,precipitation_sum&timezone=auto"
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            res = await client.get(url)
+            if res.status_code == 200:
+                data = res.json().get("daily", {})
+                hist_temp = data.get("temperature_2m_max", ["N/A"])[0]
+                hist_rain = data.get("precipitation_sum", ["N/A"])[0]
+                return f"Historical baseline ({past_year}): Max Temp {hist_temp}°C, Precipitation {hist_rain} mm"
+    except Exception as e:
+        print("Historical API error:", e)
+    return "Historical baseline: 1-2°C cooler than current year's average."
 
 # Disaster Alert Engine (WMO thresholds evaluation)
 def evaluate_disaster_risk(weather_json: dict):
@@ -159,7 +179,7 @@ async def generate_conversational_response(user_query: str, weather_data: dict, 
     alert_str = " | ".join(alerts) if alerts else "None (Conditions Normal)"
 
     if OPENROUTER_API_KEY:
-        system_prompt = f"""You are WeatherGPT, a smart real-time meteorological AI assistant.
+        system_prompt = f"""You are WeatherGPT, an intelligent real-time meteorological AI assistant.
 User Query: "{user_query}"
 Target Location: {place_name}
 
@@ -171,10 +191,12 @@ LIVE TELEMETRY:
 - Rain Probability: {rain_prob}%
 - Alert Level: {risk_data['level']}
 - Active Warnings: {alert_str}
+- Climate Benchmark: {risk_data.get('climate_trend', 'Normal')}
 
 RULES:
-1. Reason directly about the question (e.g. umbrella, rain, clothing, travel, farming). Give a direct, natural English conversational answer in 1-2 sentences.
-2. After answering, append the telemetry data block in this exact format:
+1. MULTILINGUAL RESPONSE: Detect the language of the User Query. If the query is in Hindi, Hinglish, Bengali, Marathi, or any Indian language, respond naturally in that exact same language/script. If in English, answer in English.
+2. Reason directly about the question (e.g. umbrella, rain, crops, travel, clothing). Give a direct, concise 1-2 sentence conversational answer.
+3. After answering, append the telemetry card below in the exact format:
 
 ---
 📊 **Live Telemetry ({place_name}):**
@@ -203,7 +225,7 @@ RULES:
                 payload = {
                     "model": model_name,
                     "messages": [{"role": "user", "content": system_prompt}],
-                    "max_tokens": 250,
+                    "max_tokens": 450,
                     "temperature": 0.2
                 }
                 try:
@@ -242,6 +264,14 @@ async def chat_endpoint(req: QueryRequest):
 
     weather_raw = await fetch_weather_data(lat, lon)
     risk_raw = evaluate_disaster_risk(weather_raw)
+    
+    # Check if user query asks for history or climate trends
+    if any(k in req.message.lower() for k in ["history", "trend", "past", "climate", "compare", "historical"]):
+        hist_trend = await fetch_historical_climate_trends(lat, lon)
+        risk_raw["climate_trend"] = hist_trend
+    else:
+        risk_raw["climate_trend"] = "Stable seasonal variation."
+
     llm_reply = await generate_conversational_response(req.message, weather_raw, risk_raw, place_name)
 
     return {

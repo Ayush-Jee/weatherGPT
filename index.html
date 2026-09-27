@@ -50,6 +50,9 @@
                 class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition shrink-0">
                 🔍
             </button>
+
+            
+
             <button onclick="getUserGeolocation()"
                 class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-medium transition shrink-0"
                 title="Current GPS Location">
@@ -78,15 +81,37 @@
             </div>
 
             <!-- Quick prompts pinned above input -->
+            <!-- Domain-Specific Decision Support Quick Prompts -->
             <div
                 class="px-3 py-1.5 flex gap-2 overflow-x-auto text-[11px] text-slate-400 border-t border-slate-800/50 shrink-0">
+                <button
+                    onclick="sendQuick('Agriculture Advisory: Is today suitable for irrigation and spraying pesticides?')"
+                    class="bg-emerald-950/70 border border-emerald-700/60 text-emerald-300 px-2.5 py-1 rounded hover:bg-emerald-900 whitespace-nowrap"
+                    title="Kisaan Advisory">
+                    🌾 Agri/Crop Advisory
+                </button>
+                <button
+                    onclick="sendQuick('Marine & Coastal Alert: Are wind speeds and sea conditions safe for fishermen today?')"
+                    class="bg-cyan-950/70 border border-cyan-700/60 text-cyan-300 px-2.5 py-1 rounded hover:bg-cyan-900 whitespace-nowrap"
+                    title="Fishermen Safety">
+                    ⚓ Marine & Fishermen
+                </button>
+                <button
+                    onclick="sendQuick('Aviation & Travel: Check wind gusts, visibility, and flight/travel safety status.')"
+                    class="bg-purple-950/70 border border-purple-700/60 text-purple-300 px-2.5 py-1 rounded hover:bg-purple-900 whitespace-nowrap"
+                    title="Travel & Flight Briefing">
+                    ✈️ Aviation & Travel
+                </button>
+
+                <button onclick="sendQuick('Show historical climate trend and compare today weather with past years')"
+                    class="bg-amber-950/70 border border-amber-700/60 text-amber-300 px-2.5 py-1 rounded hover:bg-amber-900 whitespace-nowrap" title="Climate Analytics">
+                    📊 Climate Trends
+                </button>
+
                 <button onclick="sendQuick('Will I need to carry an umbrella tomorrow?')"
-                    class="bg-slate-800 px-2.5 py-1 rounded hover:bg-slate-700 whitespace-nowrap">🌧️ Umbrella
-                    Check</button>
-                <button onclick="sendQuick('Delhi heatwave status')"
-                    class="bg-slate-800 px-2.5 py-1 rounded hover:bg-slate-700 whitespace-nowrap">🔥 Heatwave</button>
-                <button onclick="sendQuick('Puri cyclone warning status')"
-                    class="bg-slate-800 px-2.5 py-1 rounded hover:bg-slate-700 whitespace-nowrap">🌀 Cyclone</button>
+                    class="bg-slate-800 px-2.5 py-1 rounded hover:bg-slate-700 whitespace-nowrap">
+                    🌧️ Umbrella
+                </button>
             </div>
 
             <!-- Chat input + Voice (Pinned at bottom of left column) -->
@@ -371,7 +396,8 @@
                 return;
             }
             const recognition = new SpeechRecognition();
-            recognition.lang = 'en-IN';
+            // Supports bilingual Hindi-English voice input
+            recognition.lang = 'hi-IN';
             const micBtn = document.getElementById("micBtn");
             micBtn.classList.add("bg-red-600");
 

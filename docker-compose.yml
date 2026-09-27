@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  # WeatherGPT Web Application
+  weathergpt-app:
+    build: .
+    container_name: weathergpt_core
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - MONGO_URI=${MONGO_URI}
+    volumes:
+      - .:/app
+    depends_on:
+      - mongodb
+
+  # Local MongoDB Container Fallback
+  mongodb:
+    image: mongo:latest
+    container_name: weathergpt_mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:
