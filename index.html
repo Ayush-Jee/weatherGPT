@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>WeatherGPT - Disaster Intelligence & Forecast</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        /* Sleek scrollbar for internal chat */
+        #chatHistory::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        #chatHistory::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+
+        #chatHistory::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+
+        #chatHistory::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-950 text-slate-100 flex flex-col h-screen w-screen overflow-hidden font-sans">
+
+    <!-- Header (Fixed Height: 56px) -->
+    <header
+        class="h-14 px-4 sm:px-6 bg-slate-900 border-b border-slate-800 flex justify-between items-center shrink-0 z-20">
+        <div class="flex items-center space-x-2">
+            <span class="text-xl">⚡</span>
+            <h1 class="font-bold text-base sm:text-lg text-blue-400">WeatherGPT <span
+                    class="text-[10px] bg-red-600 text-white px-1.5 py-0.5 rounded font-mono">DISASTER RESPONSE</span>
+            </h1>
+        </div>
+
+        <!-- Location Search Bar -->
+        <div class="flex items-center gap-1.5 max-w-xs sm:max-w-md w-full mx-2 sm:mx-4">
+            <input id="locSearchInput" type="text" placeholder="Search city (e.g. Patna, Puri)..."
+                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-blue-500"
+                onkeypress="if(event.key === 'Enter') searchLocation()">
+            <button onclick="searchLocation()"
+                class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition shrink-0">
+                🔍
+            </button>
+            <button onclick="getUserGeolocation()"
+                class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-medium transition shrink-0"
+                title="Current GPS Location">
+                📍
+            </button>
+        </div>
+
+        <div id="alertBadge"
+            class="hidden sm:block text-xs font-bold px-3 py-1 rounded bg-emerald-600 text-white whitespace-nowrap shrink-0">
+            NO ACTIVE ALERTS
+        </div>
+    </header>
+
+    <!-- Main Workspace (Locked Height, No Screen-level Overflow) -->
+    <main class="flex-1 grid grid-cols-1 md:grid-cols-3 min-h-0 overflow-hidden">
+
+        <!-- Left: Conversational Bot (Height Locked with Internal Scroll) -->
+        <section class="flex flex-col h-full min-h-0 border-r border-slate-800 bg-slate-900/40 overflow-hidden">
+            <!-- Chat history: ONLY this area will scroll -->
+            <div id="chatHistory" class="flex-1 min-h-0 p-3 sm:p-4 overflow-y-auto space-y-3 text-xs sm:text-sm">
+                <div
+                    class="bg-slate-800/80 p-2.5 sm:p-3 rounded-lg border border-slate-700 max-w-[88%] leading-relaxed">
+                    👋 Hello! I am WeatherGPT. Search any location or ask questions like umbrella advice, alerts, and
+                    farming tips.
+                </div>
+            </div>
+
+            <!-- Quick prompts pinned above input -->
+            <div
+                class="px-3 py-1.5 flex gap-2 overflow-x-auto text-[11px] text-slate-400 border-t border-slate-800/50 shrink-0">
+                <button onclick="sendQuick('Will I need to carry an umbrella tomorrow?')"
+                    class="bg-slate-800 px-2.5 py-1 rounded hover:bg-slate-700 whitespace-nowrap">🌧️ Umbrella
+                    Check</button>
+                <button onclick="sendQuick('Delhi heatwave status')"
+                    class="bg-slate-800 px-2.5 py-1 rounded hover:bg-slate-700 whitespace-nowrap">🔥 Heatwave</button>
+                <button onclick="sendQuick('Puri cyclone warning status')"
+                    class="bg-slate-800 px-2.5 py-1 rounded hover:bg-slate-700 whitespace-nowrap">🌀 Cyclone</button>
+            </div>
+
+            <!-- Chat input + Voice (Pinned at bottom of left column) -->
+            <div class="p-2.5 sm:p-3 border-t border-slate-800 bg-slate-900 flex gap-1.5 sm:gap-2 shrink-0">
+                <input id="queryInput" type="text" placeholder="Ask questions (e.g. Will it rain tomorrow?)..."
+                    class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs sm:text-sm focus:outline-none focus:border-blue-500"
+                    onkeypress="if(event.key === 'Enter') handleSend()">
+                <button onclick="startVoiceInput()" id="micBtn"
+                    class="bg-slate-800 hover:bg-slate-700 px-2.5 sm:px-3 py-2 rounded-lg text-sm shrink-0"
+                    title="Speak">🎙️</button>
+                <button onclick="handleSend()"
+                    class="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm shrink-0">Send</button>
+            </div>
+        </section>
+
+        <!-- Right: Telemetry & Geospatial Radar Map -->
+        <section class="md:col-span-2 flex flex-col h-full min-h-0 p-3 sm:p-4 gap-3 overflow-hidden">
+
+            <!-- Metrics grid (Shrink-0) -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 shrink-0">
+                <div class="bg-slate-900 border border-slate-800 p-2.5 sm:p-3 rounded-lg">
+                    <div class="flex justify-between items-center text-[11px] sm:text-xs text-slate-400">
+                        <span>Temperature</span>
+                        <span id="locLabel"
+                            class="text-blue-400 font-semibold truncate max-w-[80px] sm:max-w-[120px]">Detecting...</span>
+                    </div>
+                    <div id="statTemp" class="text-xl sm:text-2xl font-bold text-blue-400 mt-1">-- °C</div>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 p-2.5 sm:p-3 rounded-lg">
+                    <div class="text-[11px] sm:text-xs text-slate-400">Humidity</div>
+                    <div id="statHumidity" class="text-xl sm:text-2xl font-bold text-teal-400 mt-1">-- %</div>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 p-2.5 sm:p-3 rounded-lg">
+                    <div class="text-[11px] sm:text-xs text-slate-400">Wind Gusts</div>
+                    <div id="statWind" class="text-xl sm:text-2xl font-bold text-amber-400 mt-1">-- km/h</div>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 p-2.5 sm:p-3 rounded-lg">
+                    <div class="text-[11px] sm:text-xs text-slate-400">Rainfall (1hr)</div>
+                    <div id="statRain" class="text-xl sm:text-2xl font-bold text-indigo-400 mt-1">-- mm</div>
+                </div>
+            </div>
+
+            <!-- Radar Map (Strictly fills the remaining space) -->
+            <div
+                class="flex-1 min-h-0 bg-slate-900 border border-slate-800 rounded-lg overflow-hidden relative shadow-inner">
+                <div id="map" class="h-full w-full"></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- WeatherGPT Feedback Footer (Fixed bottom strip) -->
+    <footer class="bg-slate-950 border-t border-slate-800/80 px-4 sm:px-6 py-2 shrink-0 z-20">
+        <div class="max-w-7xl mx-auto flex flex-row items-center justify-between gap-3 sm:gap-4">
+
+            <!-- Left Branding -->
+            <div class="space-y-0.5 text-left">
+                <div class="text-sm font-bold tracking-tight text-slate-200">WeatherGPT AI</div>
+                <div class="text-[10px] sm:text-xs font-semibold text-blue-500 tracking-wide">
+                    Plan <span class="mx-0.5 text-slate-600">•</span> Adapt <span class="mx-0.5 text-slate-600">•</span>
+                    Connect
+                </div>
+            </div>
+
+            <!-- Middle: Feedback Trigger Card -->
+            <div
+                class="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 sm:px-4 sm:py-2 flex items-center justify-between gap-3 shadow-md">
+                <div class="hidden sm:block space-y-0.5 text-left">
+                    <span class="text-[9px] font-bold text-blue-400 uppercase tracking-wider block">CLIENT
+                        FEEDBACK</span>
+                    <h4 class="text-xs font-bold text-white tracking-tight">Help us improve your journey</h4>
+                </div>
+                <button onclick="openFeedbackModal()"
+                    class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg flex items-center gap-1.5 transition duration-200 shadow-md shrink-0">
+                    <span>💬</span> Share
+                </button>
+            </div>
+
+            <!-- Right Meta -->
+            <div class="text-[10px] text-slate-500 text-right">
+                <div>© 2026 WeatherGPT AI</div>
+                <div class="text-slate-600">SIH 2026</div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Feedback Modal Dialog (High z-index) -->
+    <div id="feedbackModal"
+        class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl relative">
+            <button type="button" onclick="closeFeedbackModal()"
+                class="absolute top-4 right-4 text-slate-400 hover:text-white text-xl font-bold p-1">✕</button>
+
+            <div class="flex items-center gap-2 mb-2">
+                <span class="text-xl">💬</span>
+                <h3 class="text-lg font-bold text-white">Share Your Feedback</h3>
+            </div>
+            <p class="text-xs text-slate-400 mb-4">Your response helps improve WeatherGPT.</p>
+
+            <form id="feedbackForm" onsubmit="submitFeedback(event)" class="space-y-3.5">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Your Name</label>
+                    <input type="text" id="fbName" placeholder="Your Name"
+                        class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Email (Optional)</label>
+                    <input type="email" id="fbEmail" placeholder="Email"
+                        class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Feedback / Suggestions <span
+                            class="text-red-400">*</span></label>
+                    <textarea id="fbMessage" rows="3" required placeholder="Write your experience or suggestion here..."
+                        class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-blue-500"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeFeedbackModal()"
+                        class="px-4 py-2 text-xs rounded-lg text-slate-300 hover:bg-slate-800 transition">Cancel</button>
+                    <button type="submit" id="fbSubmitBtn"
+                        class="px-5 py-2 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow transition">Submit
+                        Feedback</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let currentLat = 22.5726;
+        let currentLon = 88.3639;
+        let currentCity = "Kolkata, West Bengal";
+
+        const map = L.map('map').setView([currentLat, currentLon], 8);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        let marker = L.marker([currentLat, currentLon]).addTo(map).bindPopup(`Active Area: ${currentCity}`).openPopup();
+
+        setTimeout(() => { map.invalidateSize(); }, 300);
+        window.addEventListener('resize', () => { map.invalidateSize(); });
+
+        fetch("https://api.rainviewer.com/public/weather-maps.json")
+            .then(res => res.json())
+            .then(apiData => {
+                if (apiData?.radar?.past?.length > 0) {
+                    const latest = apiData.radar.past[apiData.radar.past.length - 1];
+                    L.tileLayer(`https://tilecache.rainviewer.com${latest.path}/256/{z}/{x}/{y}/2/1_1.png`, {
+                        opacity: 0.65,
+                        zIndex: 100,
+                        maxZoom: 6,
+                        minZoom: 1
+                    }).addTo(map);
+                }
+            })
+            .catch(e => console.log("Radar overlay skipped", e));
+
+        async function updateWeatherForCoords(lat, lon, cityName) {
+            currentLat = lat;
+            currentLon = lon;
+            currentCity = cityName;
+
+            document.getElementById("locLabel").innerText = cityName;
+            map.flyTo([lat, lon], 9, { animate: true, duration: 1.2 });
+            marker.setLatLng([lat, lon]).bindPopup(`Active: <b>${cityName}</b>`).openPopup();
+
+            try {
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_gusts_10m&timezone=auto`;
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (data.current) {
+                    document.getElementById("statTemp").innerText = (data.current.temperature_2m ?? "--") + " °C";
+                    document.getElementById("statHumidity").innerText = (data.current.relative_humidity_2m ?? "--") + " %";
+                    document.getElementById("statWind").innerText = (data.current.wind_gusts_10m ?? "--") + " km/h";
+                    document.getElementById("statRain").innerText = (data.current.precipitation ?? "0") + " mm";
+                }
+            } catch (err) {
+                console.error("Telemetry error", err);
+            }
+        }
+
+        async function searchLocation() {
+            const rawInput = document.getElementById("locSearchInput").value.trim();
+            if (!rawInput) return;
+            const cleanQuery = rawInput.split(",")[0].trim();
+
+            try {
+                const osmUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cleanQuery)}&countrycodes=in&format=json&limit=1&accept-language=en`;
+                const res = await fetch(osmUrl);
+                const data = await res.json();
+
+                if (data && data.length > 0) {
+                    const lat = parseFloat(data[0].lat);
+                    const lon = parseFloat(data[0].lon);
+                    const parts = data[0].display_name.split(",");
+                    const displayName = parts.length > 2 ? `${parts[0].trim()}, ${parts[parts.length - 2].trim()}` : data[0].display_name;
+
+                    await updateWeatherForCoords(lat, lon, displayName);
+                    sendDirectQuery(`Weather forecast and risk advisory for ${displayName}`);
+                    return;
+                }
+            } catch (err) { }
+
+            try {
+                const fallbackUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cleanQuery + ' India')}&count=1&language=en&format=json`;
+                const fbRes = await fetch(fallbackUrl);
+                const fbData = await fbRes.json();
+                if (fbData.results && fbData.results.length > 0) {
+                    const loc = fbData.results[0];
+                    const nameWithState = `${loc.name}, ${loc.admin1 || 'India'}`;
+                    await updateWeatherForCoords(loc.latitude, loc.longitude, nameWithState);
+                    sendDirectQuery(`Weather forecast and risk advisory for ${nameWithState}`);
+                } else {
+                    alert(`"${rawInput}" not found. Please verify spelling.`);
+                }
+            } catch (e) {
+                alert("Location search error. Please try again.");
+            }
+        }
+
+        function getUserGeolocation() {
+            if (!navigator.geolocation) {
+                alert("Geolocation is not supported by your browser.");
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
+                let detectedName = "Your GPS Location";
+                try {
+                    const rev = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=en`);
+                    const data = await rev.json();
+                    if (data && data.display_name) {
+                        const parts = data.display_name.split(",");
+                        detectedName = parts.length > 2 ? `${parts[0].trim()}, ${parts[parts.length - 2].trim()}` : parts[0].trim();
+                    }
+                } catch (e) { }
+                await updateWeatherForCoords(lat, lon, detectedName);
+                sendDirectQuery(`Weather forecast and alerts for my current location`);
+            }, () => {
+                alert("Unable to retrieve location permission.");
+            });
+        }
+
+        async function sendDirectQuery(queryText) {
+            appendChat("User", queryText, "self-end bg-blue-600 text-white ml-auto");
+            try {
+                const res = await fetch("/api/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        message: queryText,
+                        lat: currentLat,
+                        lon: currentLon,
+                        city: currentCity
+                    })
+                });
+                const data = await res.json();
+                appendChat("WeatherGPT", data.reply, "bg-slate-800 text-slate-200 border border-slate-700 mr-auto");
+
+                const badge = document.getElementById("alertBadge");
+                if (badge) {
+                    if (data.risk && data.risk.level !== "NORMAL") {
+                        badge.className = `text-xs font-bold px-3 py-1 rounded text-white animate-pulse ${data.risk.level === 'RED' ? 'bg-red-600' : 'bg-amber-600'}`;
+                        badge.innerText = `${data.risk.level} RISK: ${data.risk.active_warnings[0] || 'Active Advisory'}`;
+                    } else {
+                        badge.className = "text-xs font-bold px-3 py-1 rounded bg-emerald-600 text-white";
+                        badge.innerText = "NO ACTIVE ALERTS";
+                    }
+                }
+            } catch (err) {
+                appendChat("System", "Error communicating with AI pipeline.", "bg-red-950 text-red-200");
+            }
+        }
+
+        function startVoiceInput() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                alert("Speech Recognition is supported best in Chrome.");
+                return;
+            }
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'en-IN';
+            const micBtn = document.getElementById("micBtn");
+            micBtn.classList.add("bg-red-600");
+
+            recognition.onresult = function (event) {
+                document.getElementById("queryInput").value = event.results[0][0].transcript;
+                micBtn.classList.remove("bg-red-600");
+                handleSend();
+            };
+            recognition.onerror = () => micBtn.classList.remove("bg-red-600");
+            recognition.start();
+        }
+
+        function sendQuick(text) {
+            document.getElementById("queryInput").value = text;
+            handleSend();
+        }
+
+        async function handleSend() {
+            const input = document.getElementById("queryInput");
+            const query = input.value.trim();
+            if (!query) return;
+            input.value = "";
+            sendDirectQuery(query);
+        }
+
+        function formatMarkdown(text) {
+            if (!text) return "";
+            return text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/---/g, '<hr class="border-slate-700 my-2">')
+                .replace(/\n/g, '<br>');
+        }
+
+        function appendChat(sender, message, style) {
+            const history = document.getElementById("chatHistory");
+            const msgDiv = document.createElement("div");
+            msgDiv.className = `p-2.5 sm:p-3 rounded-lg max-w-[88%] ${style} mb-2 leading-relaxed shrink-0 text-xs sm:text-sm whitespace-normal shadow-sm`;
+            msgDiv.innerHTML = `<span class="font-bold text-blue-400">${sender}:</span><div class="mt-1">${formatMarkdown(message)}</div>`;
+            history.appendChild(msgDiv);
+
+            history.scrollTo({
+                top: history.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+
+        function openFeedbackModal() {
+            const modal = document.getElementById("feedbackModal");
+            modal.classList.remove("hidden");
+        }
+
+        function closeFeedbackModal() {
+            const modal = document.getElementById("feedbackModal");
+            modal.classList.add("hidden");
+            document.getElementById("feedbackForm").reset();
+        }
+
+        async function submitFeedback(event) {
+            event.preventDefault();
+            const btn = document.getElementById("fbSubmitBtn");
+            btn.innerText = "Saving...";
+            btn.disabled = true;
+
+            const payload = {
+                name: document.getElementById("fbName").value || "Anonymous",
+                email: document.getElementById("fbEmail").value || "",
+                message: document.getElementById("fbMessage").value
+            };
+
+            try {
+                const res = await fetch("/api/feedback", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    alert("Thank you! Your feedback has been saved.");
+                    closeFeedbackModal();
+                } else {
+                    alert("Database write error. Check terminal logs.");
+                }
+            } catch (err) {
+                alert("Server connection failed.");
+            } finally {
+                btn.innerText = "Submit Feedback";
+                btn.disabled = false;
+            }
+        }
+
+        async function detectUserLocationAutomatically() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    async (pos) => {
+                        const lat = pos.coords.latitude;
+                        const lon = pos.coords.longitude;
+                        let detectedCity = "My Location";
+                        try {
+                            const rev = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=en`);
+                            const revData = await rev.json();
+                            if (revData && revData.display_name) {
+                                const parts = revData.display_name.split(",");
+                                detectedCity = parts.length > 2 ? `${parts[0].trim()}, ${parts[parts.length - 2].trim()}` : parts[0].trim();
+                            }
+                        } catch (e) { }
+                        await updateWeatherForCoords(lat, lon, detectedCity);
+                    },
+                    async () => {
+                        await fallbackToIPLocation();
+                    },
+                    { enableHighAccuracy: true, timeout: 3500 }
+                );
+            } else {
+                await fallbackToIPLocation();
+            }
+        }
+
+        async function fallbackToIPLocation() {
+            try {
+                const res = await fetch("https://ipwho.is/");
+                const data = await res.json();
+                if (data && data.success && data.latitude && data.longitude) {
+                    const cityName = `${data.city || 'Kolkata'}, ${data.region || 'India'}`;
+                    await updateWeatherForCoords(data.latitude, data.longitude, cityName);
+                    return;
+                }
+            } catch (e) { }
+
+            updateWeatherForCoords(22.5726, 88.3639, "Kolkata, West Bengal");
+        }
+
+        window.addEventListener("DOMContentLoaded", () => {
+            detectUserLocationAutomatically();
+        });
+    </script>
+</body>
+
+</html>
