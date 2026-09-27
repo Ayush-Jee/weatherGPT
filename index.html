@@ -29,11 +29,11 @@
     </style>
 </head>
 
-<body class="bg-slate-950 text-slate-100 flex flex-col h-screen w-screen overflow-hidden font-sans">
+<body class="bg-slate-950 text-slate-100 flex flex-col min-h-screen md:h-screen md:overflow-hidden font-sans">
 
     <!-- Header (Fixed Height: 56px) -->
     <header
-        class="h-14 px-4 sm:px-6 bg-slate-900 border-b border-slate-800 flex justify-between items-center shrink-0 z-20">
+        class="py-2.5 px-3 sm:px-6 bg-slate-900 border-b border-slate-800 flex flex-col sm:flex-row gap-2 justify-between items-center shrink-0 z-20">
         <div class="flex items-center space-x-2">
             <span class="text-xl">⚡</span>
             <h1 class="font-bold text-base sm:text-lg text-blue-400">WeatherGPT <span
@@ -51,7 +51,7 @@
                 🔍
             </button>
 
-            
+
 
             <button onclick="getUserGeolocation()"
                 class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-medium transition shrink-0"
@@ -67,10 +67,12 @@
     </header>
 
     <!-- Main Workspace (Locked Height, No Screen-level Overflow) -->
-    <main class="flex-1 grid grid-cols-1 md:grid-cols-3 min-h-0 overflow-hidden">
+    <!-- Main Workspace (Mobile: Scrollable Stack | Desktop: Locked Grid) -->
+    <main class="flex-1 flex flex-col md:grid md:grid-cols-3 md:min-h-0 overflow-y-auto md:overflow-hidden">
 
-        <!-- Left: Conversational Bot (Height Locked with Internal Scroll) -->
-        <section class="flex flex-col h-full min-h-0 border-r border-slate-800 bg-slate-900/40 overflow-hidden">
+        <!-- Left: Conversational Bot -->
+        <section
+            class="flex flex-col h-[400px] md:h-full md:min-h-0 border-b md:border-b-0 md:border-r border-slate-800 bg-slate-900/40 shrink-0">
             <!-- Chat history: ONLY this area will scroll -->
             <div id="chatHistory" class="flex-1 min-h-0 p-3 sm:p-4 overflow-y-auto space-y-3 text-xs sm:text-sm">
                 <div
@@ -104,7 +106,8 @@
                 </button>
 
                 <button onclick="sendQuick('Show historical climate trend and compare today weather with past years')"
-                    class="bg-amber-950/70 border border-amber-700/60 text-amber-300 px-2.5 py-1 rounded hover:bg-amber-900 whitespace-nowrap" title="Climate Analytics">
+                    class="bg-amber-950/70 border border-amber-700/60 text-amber-300 px-2.5 py-1 rounded hover:bg-amber-900 whitespace-nowrap"
+                    title="Climate Analytics">
                     📊 Climate Trends
                 </button>
 
@@ -128,8 +131,7 @@
         </section>
 
         <!-- Right: Telemetry & Geospatial Radar Map -->
-        <section class="md:col-span-2 flex flex-col h-full min-h-0 p-3 sm:p-4 gap-3 overflow-hidden">
-
+        <section class="md:col-span-2 flex flex-col md:h-full md:min-h-0 p-3 sm:p-4 gap-3">
             <!-- Metrics grid (Shrink-0) -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 shrink-0">
                 <div class="bg-slate-900 border border-slate-800 p-2.5 sm:p-3 rounded-lg">
@@ -155,8 +157,9 @@
             </div>
 
             <!-- Radar Map (Strictly fills the remaining space) -->
+            <!-- Radar Map -->
             <div
-                class="flex-1 min-h-0 bg-slate-900 border border-slate-800 rounded-lg overflow-hidden relative shadow-inner">
+                class="h-[280px] md:h-full md:flex-1 bg-slate-900 border border-slate-800 rounded-lg overflow-hidden relative shadow-inner shrink-0">
                 <div id="map" class="h-full w-full"></div>
             </div>
         </section>
